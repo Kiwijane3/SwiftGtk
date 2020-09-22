@@ -16,13 +16,13 @@ import GLibObject
 
 // In the _connect functions, data is holder that contains the swift closure to be called in response to the signal. It is registered as user data with the signal, while the handler receives data and the parameters, translate the parameter for C style values to expected swift types, and invokes the function with translated parameters. The destroy data parameter simply releases the holder.
 
-public typealias GestureSequenceHandler = (GestureRef, EventSequenceRef) -> Void;
+public typealias GestureSequenceHandler = (GestureProtocol, EventSequenceRef) -> Void;
 
-public typealias GestureSequenceStateHandler = (GestureRef, EventSequenceRef, EventSequenceState) -> Void;
+public typealias GestureSequenceStateHandler = (GestureProtocol, EventSequenceRef, EventSequenceState) -> Void;
 
-public typealias GestureSequenceHandlerClosureHolder = DualClosureHolder<GestureRef, EventSequenceRef, Void>;
+public typealias GestureSequenceHandlerClosureHolder = DualClosureHolder<GestureProtocol, EventSequenceRef, Void>;
 
-public typealias GestureSequenceStateHandlerClosureHolder = Closure3Holder<GestureRef, EventSequenceRef, EventSequenceState, Void>;
+public typealias GestureSequenceStateHandlerClosureHolder = Closure3Holder<GestureProtocol, EventSequenceRef, EventSequenceState, Void>;
 
 public extension GestureProtocol {
 	
@@ -60,7 +60,15 @@ public extension GestureProtocol {
 		// The handler is stored in a holder, which is stored as a user data object with the signal.
 		return _connect(signal: name, flags: flags, data: Closure3Holder(handler)) { (gesture, sequence, state,  data) in
 			let holder = Unmanaged<GestureSequenceStateHandlerClosureHolder>.fromOpaque(data).takeUnretainedValue();
-			holder.call(GestureRef(raw: gesture), EventSequenceRef.init(raw: sequence), EventSequenceState.init(UInt32(state)));
+			let gestureRef = GestureRef(raw: gesture);
+			let gesture: GestureProtocol;
+			if let swiftGesture = GestureRef.swiftObj as? GestureProtocol {
+				gesture = swiftGesture;
+			} else {
+				gesture = gestureRef
+			}
+			holder.call(gesture, EventSequenceRef.init(raw: sequence), EventSequenceState.init(UInt32(state)));
+			let blah = String(sequence);
 		}
 	}
 	
