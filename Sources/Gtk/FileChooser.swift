@@ -3,7 +3,7 @@
 //  SwiftGtk
 //
 //  Created by Rene Hexel on 4/8/19.
-//  Copyright © 2019 Rene Hexel.  All rights reserved.
+//  Copyright © 2019, 2020 Rene Hexel.  All rights reserved.
 //
 import CGtk
 import GtkCHelpers
@@ -19,7 +19,7 @@ public extension FileChooserDialog {
     /// - Parameter firstResponseType: response type of the first button
     /// - Parameter secondText: title of the second button
     /// - Parameter secondResponseType: response type of the second button
-    convenience init(title: UnsafePointer<gchar>? = nil, action: FileChooserAction = .open, firstText: String, firstResponseType: ResponseType = .cancel, secondText: String, secondResponseType: ResponseType = .ok) {
+    @inlinable convenience init(title: UnsafePointer<gchar>! = nil, action: FileChooserAction = .open, firstText: String, firstResponseType: ResponseType = .cancel, secondText: String, secondResponseType: ResponseType = .ok) {
         self.init(retainingCPointer: gtk_c_helper_file_chooser_dialog_new_with_two_buttons(title, nil, action, firstText, firstResponseType, secondText, secondResponseType))
     }
 
@@ -31,17 +31,10 @@ public extension FileChooserDialog {
     /// - Parameter firstResponseType: response type of the first button
     /// - Parameter secondText: title of the second button
     /// - Parameter secondResponseType: response type of the second button
-    convenience init<W: WindowProtocol>(title: UnsafePointer<gchar>? = nil, parent: W, action: FileChooserAction = .open, firstText: String, firstResponseType: ResponseType = .cancel, secondText: String, secondResponseType: ResponseType = .ok) {
+    @inlinable convenience init<W: WindowProtocol>(title: UnsafePointer<gchar>! = nil, parent: W, action: FileChooserAction = .open, firstText: String, firstResponseType: ResponseType = .cancel, secondText: String, secondResponseType: ResponseType = .ok) {
         let dialog = parent.window_ptr.withMemoryRebound(to: GtkWindow.self, capacity: 1) {
             gtk_c_helper_file_chooser_dialog_new_with_two_buttons(title, $0, action, firstText, firstResponseType, secondText, secondResponseType)!
         }
         self.init(retainingCPointer: dialog)
     }
-}
-
-public extension FileChooserAction {
-    /// convenience alias for `.select_folder`
-    static let selectFolder = FileChooserAction.select_folder
-    /// convenience alias for `.create_folder`
-    static let createFolder = FileChooserAction.create_folder
 }

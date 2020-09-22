@@ -2,6 +2,7 @@ import XCTest
 import CGtk
 import Dispatch
 @testable import Gtk
+import Gdk
 
 var cstring = strdup("Test")
 var args = [cstring]
@@ -16,11 +17,11 @@ class GtkTests: XCTestCase {
     override class func setUp() {
         usleep(100000) // FIXME: ensure gtk is initialised
     }
-    func testMajorVersion() { XCTAssertEqual(getMajorVersion(), gtk_get_major_version()) }
-    func testMinorVersion() { XCTAssertEqual(getMinorVersion(), gtk_get_minor_version()) }
-    func testMicroVersion() { XCTAssertEqual(getMicroVersion(), gtk_get_micro_version()) }
-    func testInterfaceAge() { XCTAssertEqual(getInterfaceAge(), gtk_get_interface_age()) }
-    func testBinaryAge()    { XCTAssertEqual(getBinaryAge(),    gtk_get_binary_age())    }
+    func testMajorVersion() { XCTAssertEqual(getMajorVersion(), Int(gtk_get_major_version())) }
+    func testMinorVersion() { XCTAssertEqual(getMinorVersion(), Int(gtk_get_minor_version())) }
+    func testMicroVersion() { XCTAssertEqual(getMicroVersion(), Int(gtk_get_micro_version())) }
+    func testInterfaceAge() { XCTAssertEqual(getInterfaceAge(), Int(gtk_get_interface_age())) }
+    func testBinaryAge()    { XCTAssertEqual(getBinaryAge(),    Int(gtk_get_binary_age()))    }
 
     /// test that we can run and quit an app
     func testApp() {
@@ -40,12 +41,14 @@ class GtkTests: XCTestCase {
         XCTAssertTrue(appWasRunning)
     }
 
-    /// text text buffers
-    func testTextBuffer() {
-        guard let buffer = TextBuffer() else { XCTFail() ; return }
-        let text = "Hello, world!\n"
-        buffer.text = text
-        XCTAssertEqual(buffer.text, text)
+    // test file chooser
+    func testFileChooser() {
+        XCTAssertNotNil(FileChooserDialog(firstText: "Cancel", secondText: "Okay").ptr)
+    }
+
+    // test native file chooser
+    func testFileChooserNative() {
+        XCTAssertNotNil(FileChooserNative(title: "Native", acceptLabel: "OK", cancelLabel: "Nope").ptr)
     }
 
     // test dialog convenience constructors
@@ -64,15 +67,54 @@ class GtkTests: XCTestCase {
         dialog2.set(secondaryText: "Change secondary text")
         XCTAssertNotNil(dialog2.ptr)
     }
-    
-    // test file chooser
-    func testFileChooser() {
-        XCTAssertNotNil(FileChooserDialog(firstText: "Cancel", secondText: "Okay").ptr)
+
+    // test Scrolled Window convenience methods
+    func testScrolledWindow() {
+        let vadj = Adjustment(value: 0, lower: 0, upper: 1, stepIncrement: 1, pageIncrement: 1, pageSize: 1)
+        let window1 = ScrolledWindow(vAdjustment: AdjustmentRef?.none)
+        let window2 = ScrolledWindow(vAdjustment: vadj)
+        XCTAssertNotNil(window1.ptr)
+        XCTAssertNotNil(window2.ptr)
+        XCTAssertEqual(window1.allocatedHeight, 1)
+        XCTAssertEqual(window2.allocatedHeight, 1)
     }
-    
-    // test native file chooser
-    func testFileChooserNative() {
-        XCTAssertNotNil(FileChooserNative(title: "Native", acceptLabel: "OK", cancelLabel: "Nope").ptr)
+
+    /// text text buffers
+    func testTextBuffer() {
+        guard let buffer = TextBuffer() else { XCTFail() ; return }
+        let text = "Hello, world!\n"
+        buffer.text = text
+        XCTAssertEqual(buffer.text, text)
+    }
+
+    /// test tree view row-activated signal handler
+    func testTreeViewRowActivated() {
+        var columnTypes = [GType.string]
+        let treeStore = TreeStore(nColumns: 1, types: &columnTypes)
+        let treeView = TreeView(model: treeStore)
+        let treeColumn = TreeViewColumn(0)
+        let treePath = TreePath(string: "0")
+        treeView.append([treeColumn])
+        var isTV = false
+        var isTC = false
+        var isTP = false
+        var activated = false
+        treeView.onRowActivated { (tv, tp, tc) in
+            isTV = tv.ptr == treeView.ptr
+            isTC = tc.ptr == treeColumn.ptr
+            isTP = tp.compare(b: treePath) == 0
+            activated = true
+        }
+        XCTAssertFalse(activated)
+        XCTAssertFalse(isTV)
+        XCTAssertFalse(isTP)
+        XCTAssertFalse(isTC)
+        treeView.rowActivated(path: treePath, column: treeColumn)
+//        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.25))
+        XCTAssertTrue(activated)
+        XCTAssertTrue(isTV)
+        XCTAssertTrue(isTP)
+        XCTAssertTrue(isTC)
     }
 }
 
@@ -85,6 +127,7 @@ extension GtkTests {
             ("testFileChooserNative",   testFileChooserNative),
             ("testMessageDialog",       testMessageDialog),
             ("testTextBuffer",          testTextBuffer),
+            ("testScrolledWindow",      testScrolledWindow),
             ("testMajorVersion",        testMajorVersion),
             ("testMinorVersion",        testMinorVersion),
             ("testMicroVersion",        testMicroVersion),
