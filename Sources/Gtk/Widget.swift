@@ -13,6 +13,7 @@ import GLibObject
 import GIO
 import Cairo
 import Gdk
+import GUtil
 
 /// A closure taking a reference to the current widget and cairo_t as an argument
 public typealias WidgetSignalHandler = (WidgetRef, Cairo.ContextRef) -> Bool
@@ -22,6 +23,9 @@ public typealias KeySignalHandler = (WidgetRef, EventKeyRef) -> Void
 
 /// A closure taking a reference to the current widget and `Gdk.EventButtonRef` as an argument
 public typealias ButtonSignalHandler = (WidgetRef, EventButtonRef) -> Void
+
+/// A closure taking a reference to the current widget and `Gdk.EventScrollRef` as an argument
+public typealias ScrollSignalHandler = (WidgetRef, EventScrollRef) -> Bool
 
 /// A closure taking a reference to the current widget and `Gdk.EventMotionRef` as an argument
 public typealias MotionSignalHandler = (WidgetRef, EventMotionRef) -> Void
@@ -43,6 +47,9 @@ public typealias DragDataReceivedSignalHandler = (WidgetRef, Gdk.DragContextRef,
 
 /// Internal type for button event SignalHandler closure holder
 @usableFromInline typealias ButtonSignalHandlerClosureHolder = DualClosureHolder<WidgetRef, Gdk.EventButtonRef, Void>
+
+/// Internal type for holding a reference to ScrollSignalHandler
+typealias ScrollSignalHandlerHolder = DualClosureHolder<WidgetRef, EventScrollRef, Bool>;
 
 /// Internal type for a pointer motion SignalHandler closure holder
 @usableFromInline typealias MotionSignalHandlerClosureHolder = DualClosureHolder<WidgetRef, Gdk.EventMotionRef, Void>
@@ -69,6 +76,55 @@ public extension WidgetProtocol {
     @inlinable var styleContextRef: StyleContextRef {
         return StyleContextRef(styleContext)
     }
+	
+	/// Convenience accessor for the width of the widget
+	public var width: Double {
+		get {
+			return Double(getAllocatedWidth());
+		}
+	}
+	
+	/// Convenience accessor for the height of the widget
+	public var height: Double {
+		get {
+			return Double(getAllocatedHeight());
+		}
+	}
+	
+	/// Convenience accessor for the size of the widget
+	public var size: Size {
+		get {
+			return (width: width, height: height);
+		}
+	}
+	
+	/// Convenience accessor for the upperLeft point of the widget, in the widget's coordinate space
+	public var upperLeft: (x: Double, y: Double) {
+		get {
+			return (x: 0, y: 0);
+		}
+	}
+	
+	/// Convenience accessor for the upperRight point of the widget, in the widget's coordinate space
+	public var upperRight: (x: Double, y: Double) {
+		get {
+			return (x: width, y: 0)
+		}
+	}
+	
+	/// Convenience accessor for the lowerLeft point of the widget, in the widget's coordinate space
+	public var lowerLeft: (x: Double, y: Double) {
+		get {
+			return (x: 0, y: height);
+		}
+	}
+	
+	/// Convenience accessor for the lowerRight point of the widget, in the widget's coordinate space
+	public var lowerRight: (x: Double, y: Double) {
+		get {
+			return (x: width, y: height);
+		}
+	}
 
     /// Connection helper function
     @usableFromInline internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: WidgetSignalHandlerClosureHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> gboolean) -> Int {
@@ -111,6 +167,19 @@ public extension WidgetProtocol {
         }, connectFlags: flags)
         return rv
     }
+	
+	/// Connection helper function
+	func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: ScrollSignalHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> gboolean) -> CUnsignedLong {
+		let opaqueHolder = Unmanaged.passRetained(data).toOpaque();
+		let callback = unsafeBitCast(handler, to: Callback.self);
+		let rv = signalConnectData(detailedSignal: name, cHandler: callback, data: opaqueHolder, destroyData: { (holderPointer, _) in
+			if let holderPointer = holderPointer {
+				let holder = Unmanaged<ScrollSignalHandlerHolder>.fromOpaque(holderPointer);
+				holder.release();
+			}
+		}, connectFlags: flags);
+		return rv;
+	}
 
     /// Connection helper function
     @usableFromInline internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: MotionSignalHandlerClosureHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> Void) -> Int {
@@ -205,6 +274,19 @@ public extension WidgetProtocol {
         return rv
     }
 
+	/// Connects a (WidgetRef,Gdk.EventScrollRef) -> Void closure or function to a signal for
+    /// the receiver object.  Similar to g_signal_connect(), but allows
+    /// to provide a Swift closure that can capture its surrounding context.
+	@discardableResult
+	func connectScrollSignal(signal name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping ScrollSignalHandler) -> CUnsignedLong {
+		let rv = _connect(signal: name, flags: flags, data: DualClosureHolder(handler)) { (widget, event, holderPointer) in
+			let holder = Unmanaged<ScrollSignalHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
+			let rv: gboolean = holder.call(WidgetRef(raw: widget), EventScrollRef(raw: event)) ? 1 : 0;
+			return rv;
+		}
+		return rv;
+	}
+	
     /// Connects a (WidgetRef,Gdk.EventMotionRef) -> Void closure or function to a signal for
     /// the receiver object.  Similar to g_signal_connect(), but allows
     /// to provide a Swift closure that can capture its surrounding context.
@@ -355,6 +437,16 @@ public extension WidgetProtocol {
         add(events: .buttonReleaseMask)
         return onButton(event: .buttonReleaseEvent, flags: f, handler: h)
     }
+	
+	/// Connect a `(WidgetRef, Gdk.EvenetButtonRef) -> Void` closure or function to the `.scrollEvent` signal for the recieiver'
+	/// - Parameters:
+    ///   - f: connection flags (defaults to `0`)
+    ///   - handler: signal handler
+    /// - Returns: the corresponding return value of `g_signal_connect()`
+	@discardableResult
+	func onScroll(_ handler: @escaping ScrollSignalHandler) -> CUnsignedLong {
+		return connectScrollSignal(signal: WidgetSignalName.scrollEvent.rawValue, handler: handler);
+	}
 
     /// Connect a `(WidgetRef, Gdk.EventMotionRef) -> Void` closure or function to the motion signal for the receiver.
     /// This method adds the `.pointerMotionMask` to the widget prior to connecting the closure.
