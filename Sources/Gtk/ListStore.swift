@@ -75,7 +75,7 @@ public extension ListStore {
 /// TreeView subclass for displaying lists that retain their model
 open class ListView: TreeView {
     /// The underlying list store
-    public var listStore: ListStore
+    public var listStore: ListStore!
 
     /// Convenience List View constructor
     ///
@@ -84,4 +84,9 @@ open class ListView: TreeView {
         listStore = store
         super.init(model: store.treeModel)
     }
+	
+	@inlinable required public init(retainingRaw raw: UnsafeMutableRawPointer) {
+		super.init(retainingRaw: raw);
+	}
 }
+

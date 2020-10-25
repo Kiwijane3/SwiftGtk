@@ -59,13 +59,12 @@ public extension GestureProtocol {
 			let holder = Unmanaged<GestureSequenceStateHandlerClosureHolder>.fromOpaque(data).takeUnretainedValue();
 			let gestureRef = GestureRef(raw: gesture);
 			let gesture: GestureProtocol;
-			if let swiftGesture = GestureRef.swiftObj as? GestureProtocol {
+			if let swiftGesture = gestureRef.swiftObj as? GestureProtocol {
 				gesture = swiftGesture;
 			} else {
 				gesture = gestureRef
 			}
 			holder.call(gesture, EventSequenceRef.init(raw: sequence), EventSequenceState.init(UInt32(state)));
-			let blah = String(sequence);
 		}
 	}
 	

@@ -6,11 +6,47 @@
 //
 
 import Foundation
-import Gtk
+import GIO
 import GLibObject
 import CGtk
 
+public typealias CreateWidgetHandler = (Any) -> Widget;
+
+public typealias CreateWidgetHandlerHolder = ClosureHolder<Any, Widget>;
+
 // MARK:- List organisation handler assignment.
+
+public extension ListBoxProtocol {
+	
+	func _bind<B: GIO.ListModelProtocol, T: AnyObject>(to model: Model<B, T>, using widgetCreator: @escaping CreateWidgetHandler) {
+		let holder = ClosureHolder(widgetCreator);
+		let opaqueHolder = Unmanaged<ClosureHolder>.passRetained(holder).toOpaque();
+		bind(model: model.model, createWidgetFunc: { (itemPointer, holderPointer) -> UnsafeMutablePointer<GtkWidget>? in
+			// Unwrap the itemPointer.
+			if let itemPointer = itemPointer, let holderPointer = holderPointer {
+				let holder = Unmanaged<CreateWidgetHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
+				let item = Gtk.swiftObj(fromRaw: itemPointer) as! Wrapper;
+				let widget = holder.call(item.value);
+				// Have the widget become swift widget, so the swift object wrapper is retained for the lifecycle of the widget.
+				widget.becomeSwiftObjIfInitial();
+				return widget.widget_ptr;
+			} else {
+				return nil;
+			}
+		}, userData: opaqueHolder) { (holderPointer) in
+			if let holderPointer = holderPointer {
+				Unmanaged<CreateWidgetHandlerHolder>.fromOpaque(holderPointer).release();
+			}
+		}
+	}
+	
+	func bind<B: GIO.ListModelProtocol, T: AnyObject>(to model: Model<B, T>, using widgetCreator: @escaping (T) -> Widget) {
+		self._bind(to: model) { (item) -> Widget in
+			return widgetCreator(item as! T);
+		}
+	}
+	
+}
 
 public typealias ListBoxFilterHandler = (ListBoxRowProtocol) -> Bool;
 
@@ -37,17 +73,23 @@ public extension ListBoxProtocol {
 		self.set(filterFunc: { (rowPointer, holderPointer) -> gboolean in
 			if let rowPointer = rowPointer, let holderPointer = holderPointer {
 				let holder = Unmanaged<ListBoxFilterHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
-				let rowRef = ListBoxRowRef(cPointer: rowPointer);
-				if let swiftRow = rowRef.swiftObj as? ListBoxRowProtocol {
-					return holder.call(swiftRow) ? 1 : 0;
-				} else {
-					return holder.call(rowRef) ? 1 : 0;
-				}
+				let row = swiftRepresentation(of: ListBoxRowRef(raw: rowPointer));
+				return holder.call(row) ? 1 : 0;
 			}
 			return 1;
 		}, userData: opaqueHolder) { (pointer) in
 			if let pointer = pointer {
 				Unmanaged<ListBoxFilterHandlerHolder>.fromOpaque(pointer).release();
+			}
+		}
+	}
+	
+	public func onFilter<T: ListBoxRowProtocol>(_ handler: @escaping (T) -> Bool, as filter: T.Type) {
+		self.onFilter { (row) -> Bool in
+			if let row = row as? T {
+				return handler(row);
+			} else {
+				return false;
 			}
 		}
 	}
@@ -64,10 +106,8 @@ public extension ListBoxProtocol {
 		self.set(sortFunc: { (aPointer, bPointer, holderPointer) -> gint in
 			if let aPointer = aPointer, let bPointer = bPointer, let holderPointer = holderPointer {
 				let holder = Unmanaged<ListBoxSortHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
-				let aRowRef = ListBoxRowRef(cPointer: aPointer);
-				let bRowRef = ListBoxRowRef(cPointer: bPointer);
-				let a = aRowRef.swiftObj as? ListBoxRowProtocol ?? aRowRef;
-				let b = bRowRef.swiftObj as? ListBoxRowProtocol ?? bRowRef;
+				let a = swiftRepresentation(of: ListBoxRowRef(cPointer: aPointer));
+				let b = swiftRepresentation(of: ListBoxRowRef(cPointer: bPointer));
 				let rv = holder.call(a, b);
 				return Int32(rv);
 			}
@@ -75,6 +115,16 @@ public extension ListBoxProtocol {
 		}, userData: opaqueHolder) { (holderPointer) in
 			if let holderPointer = holderPointer {
 				Unmanaged<ListBoxSortHandlerHolder>.fromOpaque(holderPointer).release();
+			}
+		}
+	}
+	
+	public func onSort<T: ListBoxRowProtocol>(_ handler: @escaping (T, T) -> Int, as type: T.Type) {
+		self.onSort { (a, b) -> Int in
+			if let a = a as? T, let b = b as? T {
+				return handler(a, b);
+			} else {
+				return 0;
 			}
 		}
 	}
@@ -108,6 +158,14 @@ public extension ListBoxProtocol {
 			}
 		}
 	}
+	
+	public func onUpdateHeader<T: ListBoxRowProtocol>(_ handler: @escaping (T, T?) -> Void, as type: T.Type) {
+		self.onUpdateHeader { (row, before) in
+			if let row = row as? T {
+				handler(row, before as? T);
+			}
+		}
+	}
 		
 }
 
@@ -127,9 +185,9 @@ public typealias BoxHandlerHolder = ClosureHolder<ListBoxProtocol, Void>;
 
 public extension ListBoxProtocol {
 	
-	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: RowHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> Void) -> CUnsignedLong {
+	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: RowHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> Void) -> Int {
 		let opaqueHolder = Unmanaged.passRetained(data).toOpaque();
-		let callback = unsafeBitCast(handler, to: Callback.self);
+		let callback = unsafeBitCast(handler, to: GLibObject.Callback.self);
 		return signalConnectData(detailedSignal: name, cHandler: callback, data: opaqueHolder, destroyData: { (holderPointer, _) in
 			if let holderPointer = holderPointer {
 				let holder = Unmanaged<RowHandlerHolder>.fromOpaque(holderPointer);
@@ -138,21 +196,20 @@ public extension ListBoxProtocol {
 		}, connectFlags: flags);
 	}
 	
-	public func connectRow(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping RowHandler) -> CUnsignedLong {
+	public func connectRow(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping RowHandler) -> Int {
 		// The handler is stored in a holder, which is stored as a user data object with the signal.
 		return _connect(signal: name, flags: flags, data: DualClosureHolder(handler)) { (boxPointer, rowPointer, holderPointer) in
 			let holder = Unmanaged<RowHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
-			let boxRef = ListBoxRef(raw: boxPointer);
-			let box = boxRef.swiftObj as? ListBoxProtocol ?? boxRef;
+			let box = swiftRepresentation(of: ListBoxRef(raw: boxPointer));
 			let rowRef = ListBoxRowRef(raw: rowPointer);
-			let row = rowRef.swiftObj as? ListBoxRowProtocol ?? rowRef;
+			let row = swiftRepresentation(of: ListBoxRowRef(raw: rowPointer));
 			holder.call(box, row);
 		}
 	}
 	
-	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: OptionalRowHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer?, gpointer) -> Void) -> CUnsignedLong {
+	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: OptionalRowHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer?, gpointer) -> Void) -> Int {
 		let opaqueHolder = Unmanaged.passRetained(data).toOpaque();
-		let callback = unsafeBitCast(handler, to: Callback.self);
+		let callback = unsafeBitCast(handler, to: GLibObject.Callback.self);
 		return signalConnectData(detailedSignal: name, cHandler: callback, data: opaqueHolder, destroyData: { (holderPointer, _) in
 			if let holderPointer = holderPointer {
 				let holder = Unmanaged<OptionalRowHandlerHolder>.fromOpaque(holderPointer);
@@ -161,24 +218,22 @@ public extension ListBoxProtocol {
 		}, connectFlags: flags);
 	}
 	
-	public func connectRow(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping OptionalRowHandler) -> CUnsignedLong {
+	public func connectRow(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping OptionalRowHandler) -> Int {
 		// The handler is stored in a holder, which is stored as a user data object with the signal.
 		return _connect(signal: name, flags: flags, data: DualClosureHolder(handler)) { (boxPointer, rowPointer, holderPointer) in
 			let holder = Unmanaged<OptionalRowHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
-			let boxRef = ListBoxRef(raw: boxPointer);
-			let box = boxRef.swiftObj as? ListBoxProtocol ?? boxRef;
+			let box = swiftRepresentation(of: ListBoxRef(raw: boxPointer));
 			var row: ListBoxRowProtocol? = nil;
 			if let rowPointer = rowPointer {
-				let rowRef = ListBoxRowRef(raw: rowPointer);
-				row = rowRef.swiftObj as? ListBoxRowProtocol ?? rowRef;
+				row = swiftRepresentation(of: ListBoxRowRef(raw: rowPointer));
 			}
 			holder.call(box, row);
 		}
 	}
 	
-	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: BoxHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer) -> Void) -> CUnsignedLong {
+	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: BoxHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer) -> Void) -> Int {
 		let opaqueHolder = Unmanaged.passRetained(data).toOpaque();
-		let callback = unsafeBitCast(handler, to: Callback.self);
+		let callback = unsafeBitCast(handler, to: GLibObject.Callback.self);
 		return signalConnectData(detailedSignal: name, cHandler: callback, data: opaqueHolder, destroyData: { (holderPointer, _) in
 			if let holderPointer = holderPointer {
 				let holder = Unmanaged<BoxHandlerHolder>.fromOpaque(holderPointer);
@@ -187,12 +242,11 @@ public extension ListBoxProtocol {
 		}, connectFlags: flags);
 	}
 	
-	public func connectBox(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping BoxHandler) -> CUnsignedLong {
+	public func connectBox(name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping BoxHandler) -> Int {
 		// The handler is stored in a holder, which is stored as a user data object with the signal.
 		return _connect(signal: name, flags: flags, data: ClosureHolder(handler)) { (boxPointer, holderPointer) in
 			let holder = Unmanaged<BoxHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
-			let boxRef = ListBoxRef(raw: boxPointer);
-			let box = boxRef.swiftObj as? ListBoxProtocol ?? boxRef;
+			let box = swiftRepresentation(of: ListBoxRef(raw: holderPointer));
 			holder.call(box);
 		}
 	}
@@ -200,7 +254,7 @@ public extension ListBoxProtocol {
 	/// The row-activated signal is emitted when a row has been activated by the user.
 	/// - Parameter box: The box on which the row has been activated. If a compatible swiftObj has been assigned, that will be returned.
 	/// - Parameter row: The row that was activated. If a compatible swiftObj has been assigned, that will be returned.
-	public func onActivateRow(_ handler: @escaping RowHandler) -> CUnsignedLong {
+	public func onActivateRow(_ handler: @escaping RowHandler) -> Int {
 		return self.connectRow(name: ListBoxSignalName.rowActivated.rawValue, handler: handler);
 	}
 	
@@ -208,13 +262,13 @@ public extension ListBoxProtocol {
 	/// When the box is using GTK_SELECTION_MULTIPLE, this signal will not give you the full picture of selection changes, and you should use the “selected-rows-changed” signal instead.
 	/// - Parameter box: The box on which rows have been selected. If a compatible swiftObj has been assigned, that will be returned.
 	/// - Parameter row: The row that was selected, or nil if a selection has been cleared.
-	public func onRowSelected(_ handler: @escaping OptionalRowHandler) -> CUnsignedLong {
+	public func onRowSelected(_ handler: @escaping OptionalRowHandler) -> Int {
 		return self.connectRow(name: ListBoxSignalName.rowSelected.rawValue, handler: handler);
 	}
 	
 	/// The selected-rows-changed signal is emitted when the set of selected rows changes.
 	/// - Parameter box: The box on which the selected rows have changed. If a compatible swiftObj has been assigned, that will be returned.
-	public func onSelectedRowsChanged(_ handler: @escaping BoxHandler) -> CUnsignedLong {
+	public func onSelectedRowsChanged(_ handler: @escaping BoxHandler) -> Int {
 		return self.connectBox(name: ListBoxSignalName.selectedRowsChanged.rawValue, handler: handler);
 	}
 }

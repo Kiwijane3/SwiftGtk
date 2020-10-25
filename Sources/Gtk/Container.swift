@@ -117,3 +117,37 @@ public extension ContainerProtocol {
         add(widgets: widgets)
     }
 }
+
+// MARK :- Finding children by name.
+
+public extension ContainerProtocol {
+	
+	public func child<T: Widget>(named name: UnsafePointer<gchar>) -> T?  {
+		var queue: [UnsafeMutablePointer<GtkContainer>] = [self.container_ptr];
+		while !queue.isEmpty {
+			var current = gtk_container_get_children(queue.popLast()!);
+			while current != nil {
+				let data = current!.pointee.data!;
+				if gtk_widget_get_name(data.assumingMemoryBound(to: GtkWidget.self)) == name {
+					return objectRepresentation(from: data, as: T.self);
+				}
+				if objectIs(data.assumingMemoryBound(to: GObject.self), a: gtk_container_get_type()) {
+					queue.insert(data.assumingMemoryBound(to: GtkContainer.self), at: 0)
+				}
+				current = current?.pointee.next;
+			}
+		}
+		return nil;
+	}
+	
+	public func child(named name: String) -> WidgetProtocol? {
+		return child(named: name);
+	}
+
+	public func removeAllChildren() {
+		self.children.foreach { (widgetPointer) in
+			self.remove(widget: WidgetRef(raw: widgetPointer))
+		}
+	}
+	
+}

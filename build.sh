@@ -4,5 +4,6 @@
 # to determine compiler and linker flags
 #
 . ./config.sh
+echo ${GIR2SWIFT_PATH}
 [ -e Sources/${Mod}/${Module}.swift ] || ./generate-wrapper.sh
 exec swift build --build-path "$BUILD_DIR" $CCFLAGS $LINKFLAGS "$@"

@@ -13,7 +13,6 @@ import GLibObject
 import GIO
 import Cairo
 import Gdk
-import GUtil
 
 /// A closure taking a reference to the current widget and cairo_t as an argument
 public typealias WidgetSignalHandler = (WidgetRef, Cairo.ContextRef) -> Bool
@@ -91,8 +90,7 @@ public extension WidgetProtocol {
 		}
 	}
 	
-	/// Convenience accessor for the size of the widget
-	public var size: Size {
+	public var size: (width: Double, height: Double) {
 		get {
 			return (width: width, height: height);
 		}
@@ -169,9 +167,9 @@ public extension WidgetProtocol {
     }
 	
 	/// Connection helper function
-	func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: ScrollSignalHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> gboolean) -> CUnsignedLong {
+	internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: ScrollSignalHandlerHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> gboolean) -> Int {
 		let opaqueHolder = Unmanaged.passRetained(data).toOpaque();
-		let callback = unsafeBitCast(handler, to: Callback.self);
+		let callback = unsafeBitCast(handler, to: GLibObject.Callback.self);
 		let rv = signalConnectData(detailedSignal: name, cHandler: callback, data: opaqueHolder, destroyData: { (holderPointer, _) in
 			if let holderPointer = holderPointer {
 				let holder = Unmanaged<ScrollSignalHandlerHolder>.fromOpaque(holderPointer);
@@ -278,7 +276,7 @@ public extension WidgetProtocol {
     /// the receiver object.  Similar to g_signal_connect(), but allows
     /// to provide a Swift closure that can capture its surrounding context.
 	@discardableResult
-	func connectScrollSignal(signal name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping ScrollSignalHandler) -> CUnsignedLong {
+	func connectScrollSignal(signal name: UnsafePointer<gchar>, flags: ConnectFlags = ConnectFlags(0), handler: @escaping ScrollSignalHandler) -> Int {
 		let rv = _connect(signal: name, flags: flags, data: DualClosureHolder(handler)) { (widget, event, holderPointer) in
 			let holder = Unmanaged<ScrollSignalHandlerHolder>.fromOpaque(holderPointer).takeUnretainedValue();
 			let rv: gboolean = holder.call(WidgetRef(raw: widget), EventScrollRef(raw: event)) ? 1 : 0;
@@ -444,7 +442,7 @@ public extension WidgetProtocol {
     ///   - handler: signal handler
     /// - Returns: the corresponding return value of `g_signal_connect()`
 	@discardableResult
-	func onScroll(_ handler: @escaping ScrollSignalHandler) -> CUnsignedLong {
+	func onScroll(_ handler: @escaping ScrollSignalHandler) -> Int {
 		return connectScrollSignal(signal: WidgetSignalName.scrollEvent.rawValue, handler: handler);
 	}
 
