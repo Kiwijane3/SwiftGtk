@@ -14,6 +14,7 @@ import GIO
 import Cairo
 import Gdk
 
+<<<<<<< HEAD
 /// A closure taking a reference to the current widget and cairo_t as an argument
 public typealias WidgetSignalHandler = (WidgetRef, Cairo.ContextRef) -> Bool
 
@@ -62,6 +63,8 @@ typealias ScrollSignalHandlerHolder = DualClosureHolder<WidgetRef, EventScrollRe
 /// Internal type for Dragging SignalHandler closure holder
 @usableFromInline typealias DragDataReceivedSignalHandlerClosureHolder = Closure7Holder<WidgetRef, Gdk.DragContextRef, gint, gint, UnsafeMutablePointer<GtkSelectionData>?, guint, guint32, Void>
 
+=======
+>>>>>>> 1973834d30991a34e4664beea76500b66bfb6145
 /// Widget protocol convenience methods
 public extension WidgetProtocol {
     /// Adds the events in the `events` OptionSet to the event mask for
@@ -124,6 +127,7 @@ public extension WidgetProtocol {
 		}
 	}
 
+<<<<<<< HEAD
     /// Connection helper function
     @usableFromInline internal func _connect(signal name: UnsafePointer<gchar>, flags: ConnectFlags, data: WidgetSignalHandlerClosureHolder, handler: @convention(c) @escaping (gpointer, gpointer, gpointer) -> gboolean) -> Int {
         let opaqueHolder = Unmanaged.passRetained(data).toOpaque()
@@ -491,5 +495,5 @@ public extension WidgetProtocol {
     @discardableResult
     @inlinable func onDragDataReceived(flags f: ConnectFlags = ConnectFlags(0), handler: @escaping DragDataReceivedSignalHandler) -> Int {
         return connectDragDataReceived(signal: WidgetSignalName.dragDataReceived.rawValue, flags: f, handler: handler)
-    }
+	}
 }
