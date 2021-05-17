@@ -493,17 +493,3 @@ public extension WidgetProtocol {
         return connectDragDataReceived(signal: WidgetSignalName.dragDataReceived.rawValue, flags: f, handler: handler)
     }
 }
-
-
-/// Widget convenience methods
-public extension Widget {
-}
-
-public extension WidgetRef {
-    /// Object pointer widget constructor.
-    /// - Note: use with caution, only when you know that the object actually is a widget
-    /// - Parameter object: Pointer to a widget typed as a `GObject`
-    @inlinable init(_ object: UnsafeMutablePointer<GObject>) {
-        ptr = UnsafeMutableRawPointer(object)
-    }
-}
